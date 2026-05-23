@@ -10,6 +10,10 @@ version: 1.0.0
 date-released: "2026-05-23"
 license: MIT
 repository-code: "https://github.com/achilleassamaras/dpac"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.20359543
+    description: v1.0.0 release archive
 keywords:
   - bibliometrics
   - research assessment

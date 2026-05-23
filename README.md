@@ -3,7 +3,7 @@
 > **Declared percentage-based author-contribution metrics from OpenAlex
 > publication records.**
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.PLACEHOLDER.svg)](https://doi.org/10.5281/zenodo.PLACEHOLDER) <!-- replace PLACEHOLDER with the Zenodo DOI assigned at first tagged release -->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20359542.svg)](https://doi.org/10.5281/zenodo.20359542)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 
@@ -187,7 +187,7 @@ and the software:
 
 > Samaras, A. G. (2026). *dpac: Declared percentage-based
 > author-contribution metrics from OpenAlex publication records* (v1.0.0).
-> Zenodo. https://doi.org/10.5281/zenodo.PLACEHOLDER
+> Zenodo. https://doi.org/10.5281/zenodo.20359542
 
 A machine-readable equivalent is provided in [`CITATION.cff`](CITATION.cff)
 so that GitHub's "Cite this repository" affordance returns the entries

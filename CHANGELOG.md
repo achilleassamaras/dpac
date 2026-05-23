@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.0.0] — 2026-05-23
 
+*Concept DOI: `10.5281/zenodo.20359542`. Version DOI: `10.5281/zenodo.20359543`.*
+
 The first archived, citable release of the package. Tagged in GitHub and
 deposited to Zenodo for DOI assignment.
 
