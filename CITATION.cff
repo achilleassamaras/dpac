@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If this software is used in published work, please cite both the software and the accompanying preprint."
+title: "dpac: Declared percentage-based author-contribution metrics from OpenAlex publication records"
+type: software
+authors:
+  - family-names: "Samaras"
+    given-names: "Achilleas G."
+    orcid: "https://orcid.org/0000-0002-0201-3695"
+version: 1.0.0
+date-released: "2026-05-23"
+license: MIT
+repository-code: "https://github.com/achilleassamaras/dpac"
+keywords:
+  - bibliometrics
+  - research assessment
+  - CRediT
+  - author contribution
+  - OpenAlex
+  - h-index
+preferred-citation:
+  type: article
+  title: "A declared percentage-based author-contribution system for weighted research metrics: a proposal"
+  authors:
+    - family-names: "Samaras"
+      given-names: "Achilleas G."
+      orcid: "https://orcid.org/0000-0002-0201-3695"
+  year: 2026
+  journal: "MetaArXiv preprint"

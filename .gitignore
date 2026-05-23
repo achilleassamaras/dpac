@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Notebook
+.ipynb_checkpoints/
+
+# dpac cache
+.dpac_cache/
+~/.dpac_cache/
+
+# Demonstration-notebook outputs (regenerable; not shipped)
+cohort_ocean_engineering.csv
+cohort_ocean_engineering.png
+
+# OS / scratch
+*.log
+.scratch/
