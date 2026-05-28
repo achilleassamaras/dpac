@@ -184,6 +184,7 @@ and the software:
 
 > Samaras, A. G. (2026). A declared percentage-based author-contribution
 > system for weighted research metrics: a proposal. *MetaArXiv preprint*.
+> https://doi.org/10.31222/osf.io/3mkz2_v1
 
 > Samaras, A. G. (2026). *dpac: Declared percentage-based
 > author-contribution metrics from OpenAlex publication records* (v1.0.0).
