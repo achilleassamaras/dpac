@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.1.0] — 2026-10-12
 
+*Concept DOI: `10.5281/zenodo.20359542`. Version DOI: `10.5281/zenodo.23325076`.*
+
 Adds the self-citation decomposition module and the first analysis folder,
 and adapts the OpenAlex client to the 2026 OpenAlex API, which rejects the
 page size of 200 that v1.0.0 requested.
