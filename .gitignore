@@ -34,3 +34,19 @@ cohort_ocean_engineering.png
 # OS / scratch
 *.log
 .scratch/
+
+# selfcite run data: never commit (names, OpenAlex ids, or list values that
+# identify scientists). See analyses/selfcite_2026-11/README.md.
+selfcite_out/
+cache/
+authors_*.csv
+sample_*.csv
+random_reference_*.csv
+contrast_sample_*.csv
+*_PRIVATE.csv
+selfcite_summary.csv
+selfcite_shares.png
+links_*.csv.gz
+# Copies of the Stanford/Elsevier list tables (large; public elsewhere)
+*.xlsx
+*.parquet

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dpac"
-version = "1.0.0"
+version = "1.1.0"
 description = "Declared percentage-based author-contribution metrics from OpenAlex publication records."
 readme = "README.md"
 license = { text = "MIT" }
@@ -19,6 +19,7 @@ keywords = [
     "author contribution",
     "OpenAlex",
     "h-index",
+    "self-citation",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

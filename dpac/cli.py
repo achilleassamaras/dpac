@@ -14,6 +14,10 @@ The declared-shares CSV is read as one row per paper with at least two
 columns: an identifier column (`work_id` or `doi`) and a `share` column
 giving the focal author's declared share for that paper. Additional
 columns are ignored.
+
+The OpenAlex API key is read from the environment variable
+OPENALEX_API_KEY (not from the command line, so that it stays out of the
+shell history).
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ import argparse
 import csv
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -68,8 +73,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument(
         "--mailto",
         help=(
-            "Contact email for the OpenAlex polite pool. Also reads "
-            "$DPAC_MAILTO."
+            "Contact email passed to OpenAlex as mailto (ignored by OpenAlex "
+            "since 2026; the API key in $OPENALEX_API_KEY is what counts). "
+            "Also reads $DPAC_MAILTO."
         ),
     )
     parser.add_argument(
@@ -101,6 +107,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(levelname)s %(message)s",
     )
+    # urllib3 logs full request URLs at DEBUG, and the URL carries the API key.
+    logging.getLogger("urllib3").setLevel(logging.INFO)
 
     if not args.orcid and not args.orcid_list:
         parser.error("either --orcid or --orcid-list must be supplied")
@@ -117,6 +125,11 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     cache_dir = Path(args.cache_dir) if args.cache_dir else None
     use_cache = not args.no_cache
+    if not os.environ.get("OPENALEX_API_KEY"):
+        logging.info(
+            "No OPENALEX_API_KEY set: OpenAlex allows only a small number of "
+            "requests a day without a key (free at openalex.org/settings/api)."
+        )
 
     if args.orcid:
         result = compute_profile(
@@ -165,6 +178,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             row[f"weighted_citations_{scheme}"] = round(m.weighted_citations, 1)
             row[f"fractional_h_{scheme}"] = round(m.fractional_h_index, 2)
             row[f"effective_papers_{scheme}"] = round(m.effective_papers, 2)
+        row["n_works_capped"] = r.n_works_capped
         rows.append(row)
 
     if not rows:

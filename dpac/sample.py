@@ -19,21 +19,31 @@ The sampling pool is constrained by:
 - has_orcid: true at the /works stage and at the /authors stage
 - works_count > a configurable minimum (applied at the /authors stage)
 - optionally, an h-index minimum (applied at the /authors stage)
+
+Requests use OpenAlex's maximum page size of 100 and send the API key from
+$OPENALEX_API_KEY (or `api_key=`) when one is set; the key never appears in
+log or error messages.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import os
 from typing import Optional
 
 import requests
 
 from .openalex import (
+    API_KEY_ENV,
+    DEFAULT_PER_PAGE,
     DEFAULT_THROTTLE_SEC,
     DEFAULT_USER_AGENT,
     OPENALEX_BASE,
     _normalise_orcid,
+    _safe_params,
+    mask_request_error,
+    raise_for_status_redacted,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,12 +82,19 @@ def _resolve_topic(topic: Optional[str]) -> Optional[str]:
 
 
 def _request_json(url: str, params: dict, mailto: Optional[str],
-                  user_agent: str) -> dict:
+                  user_agent: str, api_key: Optional[str] = None) -> dict:
     if mailto or os.environ.get("DPAC_MAILTO"):
         params = {**params, "mailto": mailto or os.environ.get("DPAC_MAILTO")}
+    key = api_key or os.environ.get(API_KEY_ENV)
+    if key:
+        params = {**params, "api_key": key}
     headers = {"User-Agent": user_agent}
-    resp = requests.get(url, params=params, headers=headers, timeout=30)
-    resp.raise_for_status()
+    logger.debug("GET %s params=%s", url, _safe_params(params))
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=30)
+    except requests.RequestException as exc:
+        raise mask_request_error(exc, key) from None
+    raise_for_status_redacted(resp, url.replace(OPENALEX_BASE, ""), key)
     return resp.json()
 
 
@@ -87,22 +104,24 @@ def _harvest_orcid_authors_from_topic(
     seed: int,
     mailto: Optional[str],
     user_agent: str,
+    api_key: Optional[str] = None,
 ) -> dict[str, str]:
     """Sample works in a topic; harvest unique ORCID-bearing authors.
 
     Returns dict: {author_openalex_id -> orcid_canonical}. Used as the
     common candidate-pool builder for both flat and stratified sampling.
     """
+    per_page = min(works_sample_size, DEFAULT_PER_PAGE)   # OpenAlex maximum: 100
     works_params = {
         "filter": f"topics.id:{topic},has_orcid:true",
         "sample": works_sample_size,
         "seed": seed,
         "select": "id,authorships",
-        "per-page": min(works_sample_size, 200),  # OpenAlex caps per-page at 200
+        "per_page": per_page,
     }
     logger.info("Sampling %d works in topic %s ...", works_sample_size, topic)
     payload = _request_json(
-        f"{OPENALEX_BASE}/works", works_params, mailto, user_agent
+        f"{OPENALEX_BASE}/works", works_params, mailto, user_agent, api_key
     )
     works = payload.get("results", [])
     if not works:
@@ -111,19 +130,18 @@ def _harvest_orcid_authors_from_topic(
 
     # If the sample is larger than one page, fetch subsequent pages.
     # OpenAlex `sample` returns up to `sample` items, paginated via `page`.
+    max_pages = math.ceil(works_sample_size / per_page)
     page = 2
-    while len(works) < works_sample_size:
+    while len(works) < works_sample_size and page <= max_pages:
         more_params = {**works_params, "page": page}
         more = _request_json(
-            f"{OPENALEX_BASE}/works", more_params, mailto, user_agent
+            f"{OPENALEX_BASE}/works", more_params, mailto, user_agent, api_key
         )
         batch = more.get("results", [])
         if not batch:
             break
         works.extend(batch)
         page += 1
-        if page > 10:   # safety break
-            break
 
     seen: dict[str, str] = {}
     for w in works:
@@ -145,6 +163,7 @@ def _lookup_author_records(
     mailto: Optional[str],
     user_agent: str,
     batch_size: int = 40,
+    api_key: Optional[str] = None,
 ) -> list[dict]:
     """Look up a list of author OpenAlex IDs on /authors.
 
@@ -165,10 +184,10 @@ def _lookup_author_records(
         params = {
             "filter": ",".join(a_filter_parts),
             "select": "id,orcid,works_count,summary_stats",
-            "per-page": batch_size,
+            "per_page": batch_size,
         }
         payload = _request_json(
-            f"{OPENALEX_BASE}/authors", params, mailto, user_agent
+            f"{OPENALEX_BASE}/authors", params, mailto, user_agent, api_key
         )
         for r in payload.get("results", []):
             orcid_url = r.get("orcid")
@@ -196,6 +215,7 @@ def sample_authors(
     user_agent: str = DEFAULT_USER_AGENT,
     throttle_sec: float = DEFAULT_THROTTLE_SEC,
     works_sample_size: int = 200,
+    api_key: Optional[str] = None,
 ) -> list[dict]:
     """Return a list of randomly sampled authors meeting the given filters.
 
@@ -223,13 +243,14 @@ def sample_authors(
         )
 
     seen = _harvest_orcid_authors_from_topic(
-        topic, works_sample_size, seed, mailto, user_agent
+        topic, works_sample_size, seed, mailto, user_agent, api_key
     )
     if not seen:
         return []
 
     candidates = _lookup_author_records(
-        list(seen), min_works, min_h_index, mailto, user_agent
+        list(seen), min_works, min_h_index, mailto, user_agent,
+        api_key=api_key,
     )
     if len(candidates) < n:
         logger.warning(
@@ -249,6 +270,7 @@ def sample_authors_stratified(
     mailto: Optional[str] = None,
     user_agent: str = DEFAULT_USER_AGENT,
     works_sample_size: int = 500,
+    api_key: Optional[str] = None,
 ) -> list[dict]:
     """Stratified random sample of authors across activity bands.
 
@@ -285,6 +307,8 @@ def sample_authors_stratified(
         Reproducibility seed.
     mailto, user_agent : str, optional
         Passed to the underlying API calls.
+    api_key : str, optional
+        OpenAlex API key; defaults to $OPENALEX_API_KEY.
     works_sample_size : int
         Pool size at the works stage. Default 500. Larger values give a
         better chance of filling every band; smaller values are faster.
@@ -303,7 +327,7 @@ def sample_authors_stratified(
         bands = [(5, 20), (21, 50), (51, 75), (76, 100), (101, 1000)]
 
     seen = _harvest_orcid_authors_from_topic(
-        topic, works_sample_size, seed, mailto, user_agent
+        topic, works_sample_size, seed, mailto, user_agent, api_key
     )
     if not seen:
         return []
@@ -313,7 +337,8 @@ def sample_authors_stratified(
     # see authors across all bands, including the low end).
     band_floor = min(b[0] for b in bands)
     candidates = _lookup_author_records(
-        list(seen), band_floor - 1, min_h_index, mailto, user_agent
+        list(seen), band_floor - 1, min_h_index, mailto, user_agent,
+        api_key=api_key,
     )
 
     # Slot candidates into bands.

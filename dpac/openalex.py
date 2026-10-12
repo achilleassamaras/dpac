@@ -4,9 +4,20 @@ OpenAlex API client with on-disk caching and polite throttling.
 Queries are made by ORCID; results are normalised into the internal Work record
 used elsewhere in the package.
 
-The OpenAlex polite-pool convention asks API users to identify themselves by
-mailto. Set the environment variable DPAC_MAILTO (or pass `mailto=` to the
-client) to participate. Requests without a mailto fall back to the public pool.
+API key. OpenAlex meters usage per day and identifies users by API key (free
+at openalex.org/settings/api); without one, the daily allowance is small. Set
+the environment variable OPENALEX_API_KEY (or pass `api_key=` to the client).
+The key is sent as the `api_key` query parameter and is never printed: it is
+masked in log messages and in error messages.
+
+mailto. OpenAlex replaced its polite pool with API keys in 2026 and now
+ignores the `mailto` parameter. DPAC_MAILTO and `mailto=` are still accepted
+and passed on, so existing scripts keep working.
+
+Author lists. OpenAlex lists at most the first 100 authors of a work. When
+the true count is not returned (`authors_count`), a list of exactly 100 names
+is flagged as capped (`Work.authors_capped`): its true size is unknown, so the
+equal and harmonic shares computed from it are approximate (upper bounds).
 """
 
 from __future__ import annotations
@@ -15,6 +26,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -25,10 +37,67 @@ import requests
 logger = logging.getLogger(__name__)
 
 OPENALEX_BASE = "https://api.openalex.org"
-DEFAULT_PER_PAGE = 200          # OpenAlex max
+DEFAULT_PER_PAGE = 100          # OpenAlex maximum page size (`per_page`, 1-100)
 DEFAULT_THROTTLE_SEC = 0.1      # polite gap between requests
 DEFAULT_CACHE_DIR = Path.home() / ".dpac_cache"
-DEFAULT_USER_AGENT = "dpac/1.0 (https://github.com/achilleassamaras/dpac)"
+DEFAULT_USER_AGENT = "dpac/1.1 (https://github.com/achilleassamaras/dpac)"
+AUTHORSHIP_CAP = 100            # OpenAlex lists at most the first 100 authors of a work
+API_KEY_ENV = "OPENALEX_API_KEY"
+DEFAULT_MIN_YEAR = 1980         # works dated earlier (or undated) are dropped
+
+_KEY_RE = re.compile(r"(api_key=)[^&\s'\"]+")
+
+
+def redact_api_key(text, api_key: Optional[str] = None) -> str:
+    """Mask the API key in a URL or message.
+
+    `api_key=<value>` becomes `api_key=***`; when the key itself is given,
+    any other occurrence of it is masked too.
+    """
+    out = _KEY_RE.sub(r"\1***", str(text))
+    if api_key:
+        out = out.replace(api_key, "***")
+    return out
+
+
+def mask_request_error(exc: Exception, api_key: Optional[str] = None) -> Exception:
+    """A copy of a `requests` exception with the API key masked in its message.
+
+    Connection errors and timeouts carry the request URL, which contains the
+    key; the copy keeps the exception type (so callers can still catch and
+    retry it) and the response, but not the URL. Raise it `from None`.
+    """
+    msg = redact_api_key(str(exc), api_key or os.environ.get(API_KEY_ENV))
+    try:
+        return type(exc)(msg, response=getattr(exc, "response", None))
+    except TypeError:
+        return requests.RequestException(msg)
+
+
+def _safe_params(params: dict) -> dict:
+    """Request parameters as they may be logged: the API key masked."""
+    return {k: ("***" if k == "api_key" else v) for k, v in params.items()}
+
+
+def raise_for_status_redacted(resp, path: str, api_key: Optional[str] = None) -> None:
+    """Raise requests.HTTPError for a 4xx/5xx response, without the API key.
+
+    The message carries the status, the endpoint and OpenAlex's own error
+    message (e.g. why a request was rejected), but never the request URL,
+    which would contain the key.
+    """
+    status = getattr(resp, "status_code", 200)
+    if status < 400:
+        return
+    detail = ""
+    try:
+        body = resp.json() or {}
+        if isinstance(body, dict):
+            detail = str(body.get("message") or body.get("error") or "")
+    except Exception:                                           # noqa: BLE001
+        detail = str(getattr(resp, "text", "") or "")[:300]
+    msg = f"HTTP {status} on /{path.lstrip('/')}" + (f": {detail}" if detail else "")
+    raise requests.HTTPError(redact_api_key(msg, api_key), response=resp)
 
 
 @dataclass
@@ -49,6 +118,7 @@ class Work:
     focal_position_known: bool      # True when byline-order resolution succeeded
     issn_l: Optional[str] = None
     extra_metrics: dict = field(default_factory=dict)
+    authors_capped: bool = False    # list cut at 100 names, true author count unknown
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -60,8 +130,13 @@ class OpenAlexClient:
     Parameters
     ----------
     mailto : str, optional
-        Contact email for the OpenAlex polite pool. Falls back to
-        $DPAC_MAILTO; if neither is set the public pool is used.
+        Contact email, passed on as `mailto` (ignored by OpenAlex since its
+        2026 switch to API keys; kept for compatibility). Falls back to
+        $DPAC_MAILTO.
+    api_key : str, optional
+        OpenAlex API key. Falls back to $OPENALEX_API_KEY. Optional, but
+        without a key OpenAlex allows only a small number of requests a day.
+        The key is never logged or included in error messages.
     cache_dir : str or Path, optional
         Directory for cached JSON responses. Default is ~/.dpac_cache.
     throttle_sec : float, optional
@@ -76,8 +151,10 @@ class OpenAlexClient:
         cache_dir: Optional[Path] = None,
         throttle_sec: float = DEFAULT_THROTTLE_SEC,
         user_agent: str = DEFAULT_USER_AGENT,
+        api_key: Optional[str] = None,
     ) -> None:
         self.mailto = mailto or os.environ.get("DPAC_MAILTO")
+        self.api_key = api_key or os.environ.get(API_KEY_ENV) or None
         self.cache_dir = Path(cache_dir) if cache_dir else DEFAULT_CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.throttle_sec = throttle_sec
@@ -118,10 +195,16 @@ class OpenAlexClient:
         headers = {"User-Agent": self.user_agent}
         if self.mailto:
             params = {**params, "mailto": self.mailto}
-        logger.debug("GET %s params=%s", url, params)
-        resp = requests.get(url, params=params, headers=headers, timeout=30)
-        self._last_request_t = time.monotonic()
-        resp.raise_for_status()
+        if self.api_key:
+            params = {**params, "api_key": self.api_key}
+        logger.debug("GET %s params=%s", url, _safe_params(params))
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=30)
+        except requests.RequestException as exc:
+            raise mask_request_error(exc, self.api_key) from None
+        finally:
+            self._last_request_t = time.monotonic()
+        raise_for_status_redacted(resp, url.replace(OPENALEX_BASE, ""), self.api_key)
         return resp.json()
 
     # ----- public -----
@@ -169,7 +252,7 @@ class OpenAlexClient:
         while cursor:
             params = {
                 "filter": filter_expr,
-                "per-page": DEFAULT_PER_PAGE,
+                "per_page": DEFAULT_PER_PAGE,
                 "cursor": cursor,
             }
             payload = self._get(f"{OPENALEX_BASE}/works", params)
@@ -199,6 +282,7 @@ def fetch_orcid_works(
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
     work_types: Optional[list[str]] = None,
+    api_key: Optional[str] = None,
 ) -> list[Work]:
     """Return a list of normalised Work records for the given ORCID.
 
@@ -206,16 +290,64 @@ def fetch_orcid_works(
     finer control over caching and throttling.
 
     Pass `work_types=['article']` to restrict to journal articles.
+
+    Works whose author list OpenAlex cut at 100 names, with the true count
+    unknown, are kept and flagged (`authors_capped`); a warning gives their
+    number. Works on which the focal author is not among the listed names
+    cannot be matched by ORCID and are skipped; when that happens on a cut
+    list, a warning gives the number too.
     """
-    client = OpenAlexClient(mailto=mailto, cache_dir=cache_dir)
+    client = OpenAlexClient(mailto=mailto, cache_dir=cache_dir, api_key=api_key)
     raw_works = client.fetch_works_by_orcid(
         orcid, use_cache=use_cache, work_types=work_types
     )
-    return [w for w in (_normalise_work(rw, orcid) for rw in raw_works) if w is not None]
+    works: list[Work] = []
+    n_beyond_cap = 0
+    for rw in raw_works:
+        w = _normalise_work(rw, orcid)
+        if w is not None:
+            works.append(w)
+        elif _list_cut(rw) and int(rw.get("publication_year") or 0) >= DEFAULT_MIN_YEAR:
+            n_beyond_cap += 1
+    n_capped = sum(1 for w in works if w.authors_capped)
+    if n_capped:
+        logger.warning(
+            "%d of %d works list %d authors, the most OpenAlex returns: their true "
+            "author count is unknown, so equal and harmonic shares on them are "
+            "approximate (upper bounds).", n_capped, len(works), AUTHORSHIP_CAP,
+        )
+    if n_beyond_cap:
+        logger.warning(
+            "%d works skipped: the focal author is not among the %d authors that "
+            "OpenAlex lists for them.", n_beyond_cap, AUTHORSHIP_CAP,
+        )
+    return works
+
+
+def _authors_count(raw: dict) -> Optional[int]:
+    """The true author count when OpenAlex returns it (`authors_count`), else None."""
+    count = raw.get("authors_count")
+    if isinstance(count, int) and not isinstance(count, bool):
+        return count
+    return None
+
+
+def _list_cut(raw: dict) -> bool:
+    """True when OpenAlex cut the work's author list at AUTHORSHIP_CAP names.
+
+    With `authors_count` in the record, the list is cut when the count
+    exceeds the listed names. Without it (the 2026 API no longer returns
+    it), a list of exactly AUTHORSHIP_CAP names is treated as cut.
+    """
+    listed = len(raw.get("authorships") or [])
+    count = _authors_count(raw)
+    if count is not None:
+        return count > listed
+    return listed >= AUTHORSHIP_CAP
 
 
 def _normalise_work(raw: dict, focal_orcid: str,
-                    min_year: int = 1980) -> Optional[Work]:
+                    min_year: int = DEFAULT_MIN_YEAR) -> Optional[Work]:
     """Project a raw OpenAlex Work into the package's internal Work record.
 
     The focal author is matched against authorships[].author.orcid; works
@@ -231,12 +363,24 @@ def _normalise_work(raw: dict, focal_orcid: str,
     categorical `author_position` field (`first`/`middle`/`last`) is read
     as a consistency check only and does not enter the numerical share
     computation. `focal_position_known` is True under this resolution.
+
+    Author count. OpenAlex lists at most the first AUTHORSHIP_CAP (100)
+    authors. When the record carries `authors_count`, `n_authors` is the
+    true count. When it does not and exactly 100 names are listed, the true
+    count is unknown: `n_authors` is 100 (a lower bound) and
+    `authors_capped` is True, so the equal and harmonic shares on that work
+    are upper bounds.
     """
     focal_orcid = _normalise_orcid(focal_orcid)
     authorships = raw.get("authorships", []) or []
-    n_authors = len(authorships)
-    if n_authors == 0:
+    n_listed = len(authorships)
+    if n_listed == 0:
         return None
+    count = _authors_count(raw)
+    # True author count when OpenAlex gives it; otherwise the listed names,
+    # which is a lower bound for a list cut at AUTHORSHIP_CAP (flagged below).
+    n_authors = count if (count is not None and count > n_listed) else n_listed
+    capped = count is None and n_listed >= AUTHORSHIP_CAP
 
     pub_year = int(raw.get("publication_year") or 0)
     if pub_year < min_year:
@@ -256,7 +400,7 @@ def _normalise_work(raw: dict, focal_orcid: str,
         return None
 
     focal_position, focal_known = _position_to_index(
-        focal_position_value, focal_idx, n_authors
+        focal_position_value, focal_idx, n_listed
     )
 
     host_venue = raw.get("primary_location", {}) or {}
@@ -273,6 +417,7 @@ def _normalise_work(raw: dict, focal_orcid: str,
         focal_position=focal_position,
         focal_position_known=focal_known,
         issn_l=issn_l,
+        authors_capped=capped,
     )
 
 

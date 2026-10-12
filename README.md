@@ -18,6 +18,12 @@ The package exists to let the two-tier comparison of §3.2 of the preprint
 be exercised against real publication records without waiting for
 declared-share metadata to become available in any database.
 
+Since v1.1.0, the package also decomposes a researcher's citations into own,
+co-author, collaborator-network and independent citations
+([`dpac.selfcite`](#self-citation-decomposition-dpacselfcite)), and the
+[`analyses/`](analyses/) folder holds the code and aggregated results of
+analyses made with it.
+
 ## Important caveat
 
 **Declared shares are not yet available in any bibliometric database.** The
@@ -105,12 +111,23 @@ dpac --orcid 0000-0000-0000-0000 --schemes declared \
      --shares-csv my_shares.csv
 ```
 
-### Polite-pool contact
+### OpenAlex API key
 
-OpenAlex asks API users to identify themselves by mailto so that requests
-can be routed through the polite pool. Either pass `--mailto your@email` on
-the CLI, set the environment variable `DPAC_MAILTO`, or pass `mailto=` to
-`compute_profile`.
+OpenAlex meters usage per day and identifies users by API key, free at
+https://openalex.org/settings/api; without a key, the daily allowance is
+small. Set the key in the environment variable `OPENALEX_API_KEY`:
+
+```bash
+export OPENALEX_API_KEY=your-key        # Windows cmd: set OPENALEX_API_KEY=your-key
+```
+
+In Python, `api_key=` can also be passed to `compute_profile`,
+`fetch_orcid_works` or `OpenAlexClient`. The key is sent as the `api_key`
+query parameter and is never printed: log and error messages mask it.
+
+The `--mailto` option, `mailto=` and `DPAC_MAILTO` are still accepted and
+passed on, but OpenAlex has ignored `mailto` since it replaced its polite
+pool with API keys in 2026.
 
 ## Finding an ORCID
 
@@ -164,6 +181,85 @@ When more than one scheme is requested, the author-level columns repeat
 per scheme. The demonstration notebook formats the cross-researcher
 version of this comparison as a table that mirrors Table 1 of the preprint.
 
+## Long author lists
+
+OpenAlex lists at most the first 100 authors of a work, and its 2026 API no
+longer returns the true author count (`authors_count`). A work with exactly
+100 listed authors is therefore flagged (`Work.authors_capped`, counted as
+`n_works_capped` in the result and in the batch table): its true author
+count is unknown, so the equal and harmonic shares computed for it are upper
+bounds. Works on which the focal author comes after the 100th name cannot be
+matched by ORCID and are skipped; a warning gives their number. When
+OpenAlex does return `authors_count`, the true count is used.
+
+## Self-citation decomposition (`dpac.selfcite`)
+
+The `selfcite` module, added in v1.1.0, asks where a researcher's citations
+come from. Every citation link, from a citing work *Q* to a cited work *P* of
+the focal author *A*, is placed in exactly one class:
+
+| Class | Definition |
+|-------|------------|
+| Own | *A* is an author of *Q*. |
+| Co-author | *A* is not on *Q*, but another author of *P* is. |
+| Collaborator network | Neither, but an author of *Q* had co-authored with *A* in or before the year of *Q*. |
+| Independent | None of the above. |
+
+The Stanford/Elsevier science-wide author databases (the "top-2% list")
+count own and co-author links as self-citations, since *Q* and *P* share an
+author; Scopus's author-level option removes own links only; neither removes
+network links.
+
+For each researcher, total citations, the *h*-index, Schreiber's (2008)
+hm-index and the author-level credit under equal and harmonic shares are
+recomputed under seven rules: all citations; without own links; without own
+and co-author links (the list's rule); also without network links; and three
+fractional rules that weight each link by the share of *Q* not held by
+authors of *P* (equal or harmonic shares; Schubert, Glänzel and Thijs, 2006),
+or not held by authors of *P* and earlier collaborators of *A*. Declared
+shares would replace the imputed ones in both places.
+
+### Command line
+
+```bash
+python -m dpac.selfcite probe                     # API key, page size, today's allowance
+python -m dpac.selfcite resolve --input list_rows.csv --output authors_list.csv
+python -m dpac.selfcite run --authors authors_list.csv --output-dir selfcite_out
+python -m dpac.selfcite report --output-dir selfcite_out
+python -m dpac.selfcite cohort --output authors_cohort.csv
+```
+
+- `resolve` matches rows of the top-2% list (columns `authfull`, `inst_name`,
+  `cc2`, `np6025`, `nc9625`) to OpenAlex author ids by name search. Matches
+  are flagged `high`, `check` or `none`; only rows with `use` = `Y` (set
+  automatically for `high`) are run.
+- `run` reads one or more author files (`openalex_id`, `use`, and optional
+  `label`, `group` and `field` columns), processes four researchers at a time
+  (`--workers`), and caches every response (`DPAC_SELFCITE_CACHE`, default
+  `~/.dpac_cache/selfcite`). When the day's OpenAlex allowance is used up,
+  it stops cleanly; the same command resumes from the cache. Records above
+  `--max-citations` OpenAlex citations (default 60,000) are skipped.
+- `report` rebuilds the group table and figure without new requests.
+- `cohort` re-draws the ocean-engineering cohort of §5.2 of the preprint.
+
+Each researcher costs about 5 list requests plus about 7 for every 1,000
+citations; a name search costs as much as ten list requests.
+
+### Outputs and privacy
+
+`run` writes four files to the output folder:
+
+- `selfcite_summary.csv` — one row per researcher: label, group, the input
+  columns that do not name the person, and the metrics;
+- `selfcite_groups.csv` — medians per group (and per field, when given);
+- `selfcite_shares.png` — the four classes for every researcher, by group;
+- `selfcite_key_PRIVATE.csv` — labels mapped to names and OpenAlex ids.
+
+The key file must not be shared. Neither should the summary file when its
+rows carry values copied from a public list, since those values identify the
+person; [`analyses/selfcite_2026-11/`](analyses/selfcite_2026-11/) shows what
+can be released instead.
+
 ## Caching
 
 OpenAlex responses are cached to disk on first fetch, keyed by ORCID. The
@@ -172,10 +268,21 @@ silently on subsequent runs; pass `--no-cache` or `use_cache=False` to
 force a refresh. Caching is on by default to be polite to the public API
 and to keep notebook re-runs fast.
 
+## Analyses
+
+- [`analyses/selfcite_2026-11/`](analyses/selfcite_2026-11/) — self-citation
+  handling and credit sharing in the 2026 (version 9) Stanford/Elsevier
+  science-wide author databases: five fields, 596 listed scientists. The
+  analysis plan, the scripts and the field- and group-level results; no
+  scientist-level data.
+
 ## Versioning and changelog
 
-The current release is **v1.0.0** — the first archived, citable release.
-The full version history is in [`CHANGELOG.md`](CHANGELOG.md).
+The current release is **v1.1.0**. It adds the `selfcite` module and the
+`analyses/` folder, and adapts the OpenAlex client to the 2026 API (page
+size 100, API key, author lists capped at 100 names). v1.0.0 was the first
+archived, citable release. The full version history is in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## Citation
 
@@ -187,7 +294,7 @@ and the software:
 > https://doi.org/10.31222/osf.io/3mkz2_v1
 
 > Samaras, A. G. (2026). *dpac: Declared percentage-based
-> author-contribution metrics from OpenAlex publication records* (v1.0.0).
+> author-contribution metrics from OpenAlex publication records* (v1.1.0).
 > Zenodo. https://doi.org/10.5281/zenodo.20359542
 
 A machine-readable equivalent is provided in [`CITATION.cff`](CITATION.cff)
@@ -201,8 +308,10 @@ MIT. See [`LICENSE`](LICENSE) for the full text.
 ## See also
 
 - [`tool_spec.md`](tool_spec.md) — full design specification, including
-  the metric definitions and the design decisions taken for v1.0.0.
+  the metric definitions, the `selfcite` rules and the design decisions.
 - [`CHANGELOG.md`](CHANGELOG.md) — version history.
+- [`analyses/`](analyses/) — code and aggregated results of analyses made
+  with the package.
 - [`demonstration.ipynb`](demonstration.ipynb) — a working empirical
   demonstration that the user runs against real ORCIDs on their own
   machine.
@@ -223,3 +332,9 @@ MIT. See [`LICENSE`](LICENSE) for the full text.
   102(46), 16569–16572.
 - Hodge, S. E., and Greenberg, D. A. (1981). Publication credit.
   *Science*, 213(4511), 950.
+- Schreiber, M. (2008). A modification of the *h*-index: the
+  *h*<sub>m</sub>-index accounts for multi-authored manuscripts. *Journal
+  of Informetrics*, 2(3), 211–216.
+- Schubert, A., Glänzel, W., and Thijs, B. (2006). The weight of author
+  self-citations. A fractional approach to self-citation counting.
+  *Scientometrics*, 67(3), 503–514.

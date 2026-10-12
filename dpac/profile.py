@@ -33,6 +33,14 @@ class ResearcherResult:
     author_level: dict[str, AuthorLevelMetrics]   # keyed by scheme name
     shares: dict[str, list[float]] = field(default_factory=dict)
 
+    @property
+    def n_works_capped(self) -> int:
+        """Works whose author list OpenAlex cut at 100 names (true count unknown).
+
+        Their equal and harmonic shares are approximate (upper bounds).
+        """
+        return sum(1 for w in self.works if getattr(w, "authors_capped", False))
+
     # ----- presentation -----
 
     def summary(self) -> str:
@@ -77,6 +85,13 @@ class ResearcherResult:
             row += f"{m.effective_papers:>16.2f}"
         lines.append(row)
 
+        if self.n_works_capped:
+            lines.append("")
+            lines.append(
+                f"Note: {self.n_works_capped} works list 100 authors, the most "
+                f"OpenAlex returns; their shares are approximate (upper bounds)."
+            )
+
         return "\n".join(lines)
 
     def as_dict(self) -> dict:
@@ -84,6 +99,7 @@ class ResearcherResult:
         return {
             "orcid": self.orcid,
             "n_works": len(self.works),
+            "n_works_capped": self.n_works_capped,
             "paper_level": {
                 "n_papers": self.paper_level.n_papers,
                 "total_citations": self.paper_level.total_citations,
@@ -113,6 +129,7 @@ def compute_profile(
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
     work_types: Optional[list[str]] = None,
+    api_key: Optional[str] = None,
 ) -> ResearcherResult:
     """Compute paper- and author-level metrics for one researcher.
 
@@ -122,6 +139,9 @@ def compute_profile(
 
     Pass `work_types=['article']` to restrict to journal articles when
     fetching from OpenAlex (no effect when `works` is supplied directly).
+
+    `api_key` is the OpenAlex API key; when omitted, $OPENALEX_API_KEY is
+    used if set.
 
     Returns a `ResearcherResult` container.
     """
@@ -134,7 +154,7 @@ def compute_profile(
     if works is None:
         works = fetch_orcid_works(
             orcid, mailto=mailto, cache_dir=cache_dir,
-            use_cache=use_cache, work_types=work_types,
+            use_cache=use_cache, work_types=work_types, api_key=api_key,
         )
 
     p_level = paper_level_metrics(works)

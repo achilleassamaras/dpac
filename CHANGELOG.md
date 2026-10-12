@@ -4,6 +4,88 @@ All notable changes to `dpac` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-10-12
+
+Adds the self-citation decomposition module and the first analysis folder,
+and adapts the OpenAlex client to the 2026 OpenAlex API, which rejects the
+page size of 200 that v1.0.0 requested.
+
+### Added
+
+- `dpac.selfcite` (`python -m dpac.selfcite`): decomposition of a
+  researcher's OpenAlex citations into own, co-author, collaborator-network
+  and independent citations, with total citations, *h*, hm (Schreiber, 2008)
+  and equal- and harmonic-share author-level credit recomputed under seven
+  self-citation rules: all citations; without own citations; without own and
+  co-author citations (the rule of the Stanford/Elsevier science-wide author
+  databases); also without network citations; and three fractional rules
+  weighting each link by the share of the citing paper not held by
+  overlapping authors (equal, harmonic and network variants). Researchers
+  are processed four at a time with one shared throttle, request counter and
+  cache; a run stops cleanly when the day's OpenAlex allowance is used up and
+  resumes from the cache. Commands: `probe`, `cohort`, `resolve` (name
+  matching for rows of the Stanford/Elsevier list), `run` and `report`.
+  Names, institutions and OpenAlex ids go only to a private key file.
+  Compared with the version used for the 2026-11 analysis, a citing paper
+  whose 100-name author list carries no true count is now flagged as
+  touching a capped list (see `analyses/selfcite_2026-11/DEPARTURES.md`,
+  item 10).
+- `analyses/selfcite_2026-11/`: the analysis plan (fixed before the data
+  were fetched, reproduced verbatim), the departures from it, the sampling,
+  analysis and figure scripts, and the field- and group-level results behind
+  the note on self-citation handling and credit sharing in the 2026 (version
+  9) Stanford/Elsevier science-wide author databases. No scientist-level
+  data; the README explains what is withheld and how to reproduce the run.
+- Optional OpenAlex API key: `OPENALEX_API_KEY`, or `api_key=` in
+  `OpenAlexClient`, `fetch_orcid_works`, `compute_profile`, `sample_authors`
+  and `sample_authors_stratified`. The key is masked in log and error
+  messages, connection errors and timeouts included, and the `-v` option no
+  longer lets `urllib3` log request URLs.
+- `Work.authors_capped` and `ResearcherResult.n_works_capped` (also in the
+  JSON output, the batch table and the plain-text summary).
+- Tests: `tests/test_openalex.py` (15 tests), `tests/test_selfcite.py` (9)
+  and `tests/test_selfcite_parallel.py` (22); 94 tests in total.
+- `.gitignore` rules that keep run data (names, OpenAlex ids, list values
+  that identify scientists) out of the repository.
+
+### Changed
+
+- `User-Agent` is `dpac/1.1`.
+- HTTP errors from OpenAlex carry OpenAlex's own message (for example, why
+  a request was rejected) and never the request URL.
+- `mailto` / `DPAC_MAILTO` are still passed on, but documented as ignored:
+  OpenAlex replaced its polite pool with API keys in 2026.
+- Demonstration notebook: an API-key cell replaces the polite-pool cell, and
+  the §7 note on byline order and long author lists replaces the obsolete
+  note on a middle-position approximation (byline positions have been exact
+  since v1.0.0). Outputs are cleared, as at the v1.0.0 packaging pass.
+- README and `tool_spec.md`: sections on the API key, long author lists,
+  `selfcite` and the `analyses/` folder.
+- Name-matching tests use fictional names and institutions.
+
+### Fixed
+
+- Page size 200 → 100 (`per_page`) in `dpac/openalex.py` and
+  `dpac/sample.py`. 100 is the maximum of the 2026 OpenAlex API, which
+  rejected 200 with HTTP 400 when tested on 12 October 2026; v1.0.0
+  requested 200 in the ORCID queries and in the sampler used by the
+  demonstration notebook.
+- Author lists capped at 100 names. OpenAlex lists at most the first 100
+  authors of a work and no longer returns `authors_count`. A work with a
+  100-name list is now flagged, since its equal and harmonic shares are
+  upper bounds; the true count is used when OpenAlex returns it; and works
+  on which the focal author comes after the 100th name, which cannot be
+  matched by ORCID, are counted in a warning instead of being skipped
+  silently.
+- Demonstration notebook: the contact cell looked up an environment
+  variable named after an e-mail address instead of `DPAC_MAILTO`, so no
+  contact address was used; two references to section 5 now point to
+  section 6.
+- Sampler paging: the number of pages follows the requested sample size
+  (it was capped at ten pages).
+- Batch table of the command-line tool: the new `n_works_capped` column
+  comes last, after the per-scheme columns.
+
 ## [1.0.0] — 2026-05-23
 
 *Concept DOI: `10.5281/zenodo.20359542`. Version DOI: `10.5281/zenodo.20359543`.*

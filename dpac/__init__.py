@@ -12,6 +12,11 @@ Two algorithmic imputation schemes (equal share and harmonic counting) are
 implemented as stand-ins for the declared shares the proposal specifies, plus
 a passthrough scheme for user-supplied declared shares.
 
+The `dpac.selfcite` module (command line: `python -m dpac.selfcite`) splits a
+researcher's citations into own, co-author, collaborator-network and
+independent citations, and recomputes the metrics under seven self-citation
+rules.
+
 See README.md for usage and tool_spec.md for the design specification.
 """
 
@@ -26,7 +31,7 @@ from .metrics import (
 from .profile import compute_profile, ResearcherResult
 from .sample import sample_authors, sample_authors_stratified, CONCEPTS, TOPICS
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 __all__ = [
     "fetch_orcid_works",
