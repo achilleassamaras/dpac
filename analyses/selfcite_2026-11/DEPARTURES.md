@@ -73,5 +73,10 @@ release.
     raise each researcher's share, the 12 researchers left out in E1 are a
     lower bound. The module is corrected in v1.1.0 (with a test), so a
     re-run with v1.1.0 gives a different E1. The released `results.md` and
-    `results.json` are those of the run as made; E1 has not been recomputed
-    here.
+    `results.json` are those of the run as made. E1 was recomputed on
+    13 October 2026 with v1.1.0 from the run's cache (no new OpenAlex
+    requests; same scripts, seeds and settings): 13 researchers are left out
+    instead of 12 (ENG 1, PHY 6, MED 6), only the E1 sections differ, and
+    every H1–H4 conclusion holds. The recomputed files are in
+    [`e1_recheck/`](e1_recheck/) (`results.md`, `results.json`); the note
+    reports this E1.

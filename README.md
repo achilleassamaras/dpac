@@ -274,7 +274,8 @@ and to keep notebook re-runs fast.
   handling and credit sharing in the 2026 (version 9) Stanford/Elsevier
   science-wide author databases: five fields, 596 listed scientists. The
   analysis plan, the scripts and the field- and group-level results; no
-  scientist-level data.
+  scientist-level data. Reported in the note cited below
+  (https://doi.org/10.31222/osf.io/njb39_v1).
 
 ## Versioning and changelog
 
@@ -297,9 +298,18 @@ and the software:
 > author-contribution metrics from OpenAlex publication records* (v1.1.0).
 > Zenodo. https://doi.org/10.5281/zenodo.20359542
 
-A machine-readable equivalent is provided in [`CITATION.cff`](CITATION.cff)
-so that GitHub's "Cite this repository" affordance returns the entries
-above.
+Work that uses the `selfcite` module or the results in
+[`analyses/selfcite_2026-11/`](analyses/selfcite_2026-11/) should also cite
+the note that reports them:
+
+> Samaras, A. G. (2026). Credit sharing reorders researchers more than
+> self-citation handling: A note on the 2026 Stanford/Elsevier science-wide
+> author databases. *MetaArXiv preprint*.
+> https://doi.org/10.31222/osf.io/njb39_v1
+
+A machine-readable equivalent of the first two entries is provided in
+[`CITATION.cff`](CITATION.cff), so that GitHub's "Cite this repository"
+affordance returns them.
 
 ## Licence
 

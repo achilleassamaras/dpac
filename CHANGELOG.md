@@ -4,6 +4,24 @@ All notable changes to `dpac` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Repository changes after the v1.1.0 release; no change to the package.
+
+### Added
+
+- `analyses/selfcite_2026-11/e1_recheck/`: sensitivity check E1 of the
+  2026-11 analysis recomputed on 13 October 2026 with the corrected
+  truncation flag of v1.1.0, from the run's cache (`results.md`,
+  `results.json`). 13 researchers are left out instead of 12; only the E1
+  sections differ, and every conclusion holds (`DEPARTURES.md`, item 10).
+- The note that reports the 2026-11 analysis, now deposited: Samaras, A. G.
+  (2026). Credit sharing reorders researchers more than self-citation
+  handling: A note on the 2026 Stanford/Elsevier science-wide author
+  databases. *MetaArXiv preprint*. https://doi.org/10.31222/osf.io/njb39_v1.
+  Cited in the README (Analyses and Citation sections) and in the analysis
+  folder's README.
+
 ## [1.1.0] — 2026-10-12
 
 *Concept DOI: `10.5281/zenodo.20359542`. Version DOI: `10.5281/zenodo.23325076`.*

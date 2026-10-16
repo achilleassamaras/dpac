@@ -34,6 +34,7 @@ cohort_ocean_engineering.png
 # OS / scratch
 *.log
 .scratch/
+sync.ffs_db
 
 # selfcite run data: never commit (names, OpenAlex ids, or list values that
 # identify scientists). See analyses/selfcite_2026-11/README.md.

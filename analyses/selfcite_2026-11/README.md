@@ -3,7 +3,10 @@
 This folder holds the code, the analysis plan and the aggregated results
 behind a short note on how the 2026 (version 9) Stanford/Elsevier
 science-wide author databases, the "top-2% list", handle self-citations and
-co-author credit (Samaras, in preparation; MetaArXiv). The analysis asks
+co-author credit: Samaras, A.G. (2026), *Credit sharing reorders researchers
+more than self-citation handling: A note on the 2026 Stanford/Elsevier
+science-wide author databases*, MetaArXiv,
+https://doi.org/10.31222/osf.io/njb39_v1. The analysis asks
 which of the two choices reorders researchers more, in five fields:
 Engineering, Physics & Astronomy, Clinical Medicine, Mathematics &
 Statistics, and Economics & Business.
@@ -43,13 +46,15 @@ citations, three outside the coverage range), without any value.
 | [`addendum_top100k_global.md`](addendum_top100k_global.md) | Output of the addendum script. |
 | [`Figure_1_reordering.png`](Figure_1_reordering.png) | The note's Figure 1: what reorders researchers. |
 | [`Figure_2_citation_sources.png`](Figure_2_citation_sources.png) | The note's Figure 2: where self-citations come from. |
+| [`e1_recheck/`](e1_recheck/) | Sensitivity check E1 recomputed with the corrected flag of v1.1.0 (`results.md`, `results.json`; 13 October 2026, from the run's cache). Only the E1 sections differ from `results.md`; see [`DEPARTURES.md`](DEPARTURES.md), item 10. |
 
 The scripts are those of the run, with the figure legends relabelled
 afterwards ([`DEPARTURES.md`](DEPARTURES.md), item 9). Their docstrings and
 the plan refer to the author's working sessions by number (*Chat 24*, *26*,
 *27*); the preface of the plan explains them. The run used the `selfcite`
 module as it stood on 12 October 2026; v1.1.0 corrects one flag that enters
-sensitivity check E1 only ([`DEPARTURES.md`](DEPARTURES.md), item 10).
+sensitivity check E1 only ([`DEPARTURES.md`](DEPARTURES.md), item 10), and
+E1 as recomputed with v1.1.0 is in [`e1_recheck/`](e1_recheck/).
 
 ## What is withheld, and why
 
@@ -132,11 +137,17 @@ articles, reviews, books and book chapters; four researchers at a time.
 continuously (new works, citations and author disambiguation), and the name
 search can return different candidates, so a re-run will reproduce the
 procedure exactly but the numbers only approximately. Level 1 results depend
-on the list alone and reproduce exactly. Sensitivity check E1 will also
-differ, because v1.1.0 corrects the truncation flag
+on the list alone and reproduce exactly. Sensitivity check E1 differs from
+`results.md` under v1.1.0, which corrects the truncation flag; the values
+to expect are those in [`e1_recheck/`](e1_recheck/)
 ([`DEPARTURES.md`](DEPARTURES.md), item 10).
 
 ## Citation
 
 Please cite the software (see the repository [`README.md`](../../README.md)
-and [`CITATION.cff`](../../CITATION.cff)) and, once deposited, the note.
+and [`CITATION.cff`](../../CITATION.cff)) and the note:
+
+> Samaras, A. G. (2026). Credit sharing reorders researchers more than
+> self-citation handling: A note on the 2026 Stanford/Elsevier science-wide
+> author databases. *MetaArXiv preprint*.
+> https://doi.org/10.31222/osf.io/njb39_v1
